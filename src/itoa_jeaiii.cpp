@@ -1,8 +1,7 @@
 /*
 MIT License
 
-Copyright (c) 2017 James Edward Anhalt III (jeaiii)
-https://github.com/jeaiii/itoa
+Copyright (c) 2017 James Edward Anhalt III - https://github.com/jeaiii/itoa
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -25,58 +24,35 @@ SOFTWARE.
 
 #include <stdint.h>
 
-#define A(N) t = (1ULL << (32 + N / 5 * N * 53 / 16)) / uint32_t(1e##N) + 1 - N / 9, t *= u, t >>= N / 5 * N * 53 / 16, t += N / 5 * 4
 
-#if 0
-// 1 char at a time
+struct pair { char t, o; };
+#define P(T) T, '0',  T, '1', T, '2', T, '3', T, '4', T, '5', T, '6', T, '7', T, '8', T, '9'
+static const pair s_pairs[] = { P('0'), P('1'), P('2'), P('3'), P('4'), P('5'), P('6'), P('7'), P('8'), P('9') };
 
-#define D(N) b[N] = char(t >> 32) + '0'
-#define E t = 10ULL * uint32_t(t)
 
-#define L0 b[0] = char(u) + '0'
-#define L1 A(1), D(0), E, D(1)
-#define L2 A(2), D(0), E, D(1), E, D(2)
-#define L3 A(3), D(0), E, D(1), E, D(2), E, D(3)
-#define L4 A(4), D(0), E, D(1), E, D(2), E, D(3), E, D(4)
-#define L5 A(5), D(0), E, D(1), E, D(2), E, D(3), E, D(4), E, D(5)
-#define L6 A(6), D(0), E, D(1), E, D(2), E, D(3), E, D(4), E, D(5), E, D(6)
-#define L7 A(7), D(0), E, D(1), E, D(2), E, D(3), E, D(4), E, D(5), E, D(6), E, D(7)
-#define L8 A(8), D(0), E, D(1), E, D(2), E, D(3), E, D(4), E, D(5), E, D(6), E, D(7), E, D(8)
-#define L9 A(9), D(0), E, D(1), E, D(2), E, D(3), E, D(4), E, D(5), E, D(6), E, D(7), E, D(8), E, D(9)
+#define W(N, I) *(pair*)&b[N] = s_pairs[I]
+//#define A(N) t = (uint64_t(1) << (32 + N / 5 * N * 53 / 16)) / uint32_t(1e##N) + 1, t *= u, t >>= N / 5 * N * 53 / 16, t += N / 5 * 4, W(0, t >> 32)
 
-#else
-// 2 chars at a time, little endian only, unaligned 2 byte writes
+#define A(N) t = (1ULL << (32 + N / 5 * N * 53 / 16)) / uint32_t(1e##N) + 1 + N/6 - N/8, t *= u, t >>= N / 5 * N * 53 / 16, t += N / 6 * 4, W(0, t >> 32)
 
-static const uint16_t s_100s[] = {
-    '00', '10', '20', '30', '40', '50', '60', '70', '80', '90',
-    '01', '11', '21', '31', '41', '51', '61', '71', '81', '91',
-    '02', '12', '22', '32', '42', '52', '62', '72', '82', '92',
-    '03', '13', '23', '33', '43', '53', '63', '73', '83', '93',
-    '04', '14', '24', '34', '44', '54', '64', '74', '84', '94',
-    '05', '15', '25', '35', '45', '55', '65', '75', '85', '95',
-    '06', '16', '26', '36', '46', '56', '66', '76', '86', '96',
-    '07', '17', '27', '37', '47', '57', '67', '77', '87', '97',
-    '08', '18', '28', '38', '48', '58', '68', '78', '88', '98',
-    '09', '19', '29', '39', '49', '59', '69', '79', '89', '99',
-};
 
-#define W(N, I) *(uint16_t*)&b[N] = s_100s[I]
-#define Q(N) b[N] = char((10ULL * uint32_t(t)) >> 32) + '0'
-#define D(N) W(N, t >> 32)
-#define E t = 100ULL * uint32_t(t)
+#define S(N) b[N] = char(uint64_t(10) * uint32_t(t) >> 32) + '0'
+#define D(N) t = uint64_t(100) * uint32_t(t), W(N, t >> 32)
 
 #define L0 b[0] = char(u) + '0'
 #define L1 W(0, u)
-#define L2 A(1), D(0), Q(2)
-#define L3 A(2), D(0), E, D(2)
-#define L4 A(3), D(0), E, D(2), Q(4)
-#define L5 A(4), D(0), E, D(2), E, D(4)
-#define L6 A(5), D(0), E, D(2), E, D(4), Q(6)
-#define L7 A(6), D(0), E, D(2), E, D(4), E, D(6) 
-#define L8 A(7), D(0), E, D(2), E, D(4), E, D(6), Q(8)
-#define L9 A(8), D(0), E, D(2), E, D(4), E, D(6), E, D(8)
+#define L2 A(1), S(2)
+#define L3 A(2), D(2)
 
-#endif
+//inline void d3(char* b, uint32_t u0, uint32_t u1) { W(2, u1), W(0, u0); }
+//#define L3 d3(b, u/100u, u%100u)
+
+#define L4 A(3), D(2), S(4)
+#define L5 A(4), D(2), D(4)
+#define L6 A(5), D(2), D(4), S(6)
+#define L7 A(6), D(2), D(4), D(6)
+#define L8 A(7), D(2), D(4), D(6), S(8)
+#define L9 A(8), D(2), D(4), D(6), D(8)
 
 #define LN(N) (L##N, b += N + 1)
 #define LZ(N) (L##N, b[N + 1] = '\0')
@@ -100,12 +76,12 @@ void u64toa_jeaiii(uint64_t n, char* b)
     uint32_t u;
     uint64_t t;
 
-    if (uint32_t(n >> 32) == 0)
+    if (uint32_t(n) == n)
         return u = uint32_t(n), (void)LG(LZ);
 
     uint64_t a = n / 100000000;
 
-    if (uint32_t(a >> 32) == 0)
+    if (uint32_t(a) == a)
     {
         u = uint32_t(a);
         LG(LN);
@@ -113,7 +89,9 @@ void u64toa_jeaiii(uint64_t n, char* b)
     else
     {
         u = uint32_t(a / 100000000);
-        LG(LN);
+
+        u < 100 ? u < 10 ? LN(0) : LN(1) : u < 1000 ? LN(2) : LN(3);
+        //LG(LN);
         u = a % 100000000;
         LN(7);
     }

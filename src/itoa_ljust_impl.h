@@ -132,7 +132,7 @@ template<typename T, u32 E, typename U = T> struct QR {
 };
 
 template<u32 E>
-typename std::enable_if<not (E%2), char*>::type cvt(char* out, u32 u) {
+typename std::enable_if<! (E%2), char*>::type cvt(char* out, u32 u) {
     QR<u32,E-2> d{u};
     memcpy(out, digits(d.q), 2); /* Note 5 */
     return cvt<E-2>(out+2, d.r);

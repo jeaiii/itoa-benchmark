@@ -6,3 +6,9 @@ result/result.csv
 result/result.html
 
 src/machine.h
+/.vs/
+/Debug
+/Release
+/x64/Debug
+/x64/Release
+*.filters

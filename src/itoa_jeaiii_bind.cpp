@@ -31,3 +31,17 @@ void u64toa_jeaiii(uint64_t i, char* b);
 void i64toa_jeaiii(int64_t i, char* b);
 
 REGISTER_TEST(jeaiii);
+
+#if 1
+void u64toa_jeaiii64(uint64_t u, char* b);
+void i64toa_jeaiii64(int64_t n, char* b) {
+    uint64_t u = n;
+    if (n < 0) *b++ = '-', u = 0 - u;
+    u64toa_jeaiii64(u, b);
+}
+
+void u32toa_jeaiii64(uint32_t u, char* b) { u64toa_jeaiii64(u, b); }
+void i32toa_jeaiii64(int32_t n, char* b) { i64toa_jeaiii64(n, b); }
+
+REGISTER_TEST(jeaiii64);
+#endif

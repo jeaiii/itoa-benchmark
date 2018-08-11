@@ -1,6 +1,6 @@
 #pragma once
 
-#include "machine.h"
+//#include "machine.h"
 
 #ifndef MACHINE
 #define MACHINE "unknown"
@@ -45,7 +45,11 @@
 #define STR(x) STR_HELPER(x)
 
 #if defined(_MSC_VER)
-#   if _MSC_VER >= 1800
+#   if _MSC_VER >= 1910
+#       define COMPILER "vc2017"
+#   elif _MSC_VER >= 1900
+#       define COMPILER "vc2015"
+#   elif _MSC_VER >= 1800
 #       define COMPILER "vc2013"
 #   elif _MSC_VER >= 1700
 #       define COMPILER "vc2012"
@@ -66,4 +70,4 @@
 #   define COMPILER "Unknown"
 #endif
 
-#define RESULT_FILENAME MACHINE "_" OS "_" COMPILER ".csv"
+#define RESULT_FILENAME MACHINE "_" OS "_" COMPILER ".json"

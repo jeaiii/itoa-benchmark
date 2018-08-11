@@ -10,9 +10,13 @@
 #include "timer.h"
 #include "test.h"
 
-const unsigned kIterationPerDigit = 100000;
-const unsigned kIterationForRandom = 100;
-const unsigned kTrial = 10;
+/*
+Changes Copyright (c) 2018 James Edward Anhalt III - https://github.com/jeaiii
+*/
+
+const unsigned c_scale = 4096*2;
+
+const int kTrial = 128;
 
 template <typename T>
 struct Traits {
@@ -41,8 +45,8 @@ struct Traits<uint64_t> {
 
 template <>
 struct Traits<int64_t> {
-    enum { kBufferSize = 22 };
-    enum { kMaxDigit = 20 };
+    enum { kBufferSize = 21 };
+    enum { kMaxDigit = 19 };
     static int64_t Negate(int64_t x) { return -x; };
 };
 
@@ -114,115 +118,144 @@ void VerifyAll() {
         }
     }
 }
+#include <intrin.h>
+
+uint64_t TimeEnter() {
+    int info[4];
+
+    _ReadWriteBarrier();
+    __cpuidex(info, 0, 0);
+    uint64_t time = __rdtsc();
+    _ReadWriteBarrier();
+    return time;
+}
+
+uint64_t TimeLeave() {
+    int info[4];
+    unsigned int aux;
+    _ReadWriteBarrier();
+    uint64_t time = __rdtscp(&aux);
+    __cpuidex(info, 0, 0);
+    _ReadWriteBarrier();
+    return time;
+}
+
+
+template<class T, size_t N>
+uint64_t BenchData(void(*f)(T, char*), const T(&data)[N])
+{
+    char buffer[Traits<T>::kBufferSize];
+    uint64_t duration = std::numeric_limits<uint64_t>::max();
+
+   // Sleep(15);
+
+    int trial = kTrial;
+    do {
+
+        uint64_t time = TimeEnter();
+        for (size_t i = 0; i < N; i += 8) {
+            f(data[i + 0], buffer);
+            f(data[i + 1], buffer);
+            f(data[i + 2], buffer);
+            f(data[i + 3], buffer);
+            f(data[i + 4], buffer);
+            f(data[i + 5], buffer);
+            f(data[i + 6], buffer);
+            f(data[i + 7], buffer);
+        }
+
+        time = (TimeLeave() - time) / N;
+
+        if (time < duration)
+            duration = time, trial = kTrial;
+
+    } while (--trial > 0);
+
+    return duration;
+}
 
 template <typename T>
 void BenchSequential(void(*f)(T, char*), const char* type, const char* fname, FILE* fp) {
     printf("Benchmarking sequential %-20s ... ", fname);
 
-    char buffer[Traits<T>::kBufferSize];
-    double minDuration = std::numeric_limits<double>::max();
-    double maxDuration = 0.0;
+    T data[c_scale];
 
-    T start = 1;
-    for (int digit = 1; digit <= Traits<T>::kMaxDigit; digit++) {
-        T end = (digit == Traits<T>::kMaxDigit) ? std::numeric_limits<T>::max() : start * 10;
+    uint64_t durations[Traits<T>::kMaxDigit + 1];
 
-        double duration = std::numeric_limits<double>::max();
-        for (unsigned trial = 0; trial < kTrial; trial++) {
-            T v = start;
-            T sign = 1;
-            Timer timer;
-            timer.Start();
-            for (unsigned iteration = 0; iteration < kIterationPerDigit; iteration++) {
-                f(v * sign, buffer);
-                sign = Traits<T>::Negate(sign);
-                if (++v == end)
-                    v = start;
-            }
-            timer.Stop();
-            duration = std::min(duration, timer.GetElapsedMilliseconds());
+    T start = 0;
+    for (int digit = 0; ++digit <= Traits<T>::kMaxDigit;) {
+        T end = (digit == Traits<T>::kMaxDigit) ? std::numeric_limits<T>::max() : (start + !start) * 10 - 1;
+        T v = start;
+        for (size_t i = 0; i < c_scale; ++i) {
+            data[i] = v;
+            v = v == end ? start : v + 1;
         }
 
-        duration *= 1e6 / kIterationPerDigit; // convert to nano second per operation
+        durations[digit] = BenchData(f, data);
 
-        minDuration = std::min(minDuration, duration);
-        maxDuration = std::max(maxDuration, duration);
-        fprintf(fp, "%s_sequential,%s,%d,%f\n", type, fname, digit, duration);
-        start = end;
+        start = end + 1;
     }
 
-    printf("[%8.3fns, %8.3fns]\n", minDuration, maxDuration);
+    uint64_t min_d = durations[1];
+    uint64_t max_d = durations[1];
+    for (int digit = 1; digit <= Traits<T>::kMaxDigit; digit++) {
+        fprintf(fp, "%lld,", durations[digit]);
+        min_d = std::min(min_d, durations[digit]);
+        max_d = std::max(max_d, durations[digit]);
+    }
+
+    printf("[%lld cc, %lld cc]\n", min_d, max_d);
 }
 
-template <class T>
+template <class T, size_t N>
 class RandomData {
 public:
-    static T* GetData() {
+    static T(&GetData())[N] {
         static RandomData singleton;
-        return singleton.mData;
+        return singleton.m_data;
     }
 
-    static const size_t kCountPerDigit = 1000;
-    static const size_t kCount = kCountPerDigit * Traits<T>::kMaxDigit;
-
+    
 private:
-    RandomData() :
-        mData(new T[kCount])
+    RandomData()
     {
-        T* p = mData;
-        T start = 1;
-        for (int digit = 1; digit <= Traits<T>::kMaxDigit; digit++) {
-            T end = (digit == Traits<T>::kMaxDigit) ? std::numeric_limits<T>::max() : start * 10;
-            T v = start;
-            T sign = 1;
-            for (size_t i = 0; i < kCountPerDigit; i++) {
-                *p++ = v * sign;
+        T x = 0;
+        T sign = 1;
+
+        for (size_t i = 0; i < N; ++i) {
+            if (x == 0)
+                x = std::numeric_limits<T>::max();
+
+            m_data[i] = x * sign;
+            if (i % 64 == 0) 
                 sign = Traits<T>::Negate(sign);
-                if (++v == end)
-                    v = start;
-            }
-            start = end;
+            x /= 10;
         }
-        std::random_shuffle(mData, mData + kCount);
+        std::random_shuffle(m_data, m_data + N);
     }
 
-    ~RandomData() {
-        delete[] mData;
-    }
-
-    T* mData;
+    T m_data[N];
 };
 
 template <typename T>
 void BenchRandom(void(*f)(T, char*), const char* type, const char* fname, FILE* fp) {
     printf("Benchmarking     random %-20s ... ", fname);
 
-    char buffer[Traits<T>::kBufferSize];
-    T* data = RandomData<T>::GetData();
-    size_t n = RandomData<T>::kCount;
+    uint64_t duration = BenchData(f, RandomData<T, c_scale>::GetData());
 
-    double duration = std::numeric_limits<double>::max();
-    for (unsigned trial = 0; trial < kTrial; trial++) {
-        Timer timer;
-        timer.Start();
-
-        for (unsigned iteration = 0; iteration < kIterationForRandom; iteration++)
-        for (size_t i = 0; i < n; i++)
-            f(data[i], buffer);
-
-        timer.Stop();
-        duration = std::min(duration, timer.GetElapsedMilliseconds());
-    }
-    duration *= 1e6 / (kIterationForRandom * n); // convert to nano second per operation
-    fprintf(fp, "%s_random,%s,0,%f\n", type, fname, duration);
-
-    printf("%8.3fns\n", duration);
+    fprintf(fp, "%lld", duration);
+    printf("%lld cc\n", duration);
 }
 
 template <typename T>
 void Bench(void(*f)(T, char*), const char* type, const char* fname, FILE* fp) {
+
+    fprintf(fp, "{ name: '%s', data:[", fname);
+
     BenchSequential(f, type, fname, fp);
     BenchRandom(f, type, fname, fp);
+
+    fprintf(fp, "]},\n");
 }
 
 
@@ -240,36 +273,48 @@ void BenchAll() {
     else
         fp = fopen(RESULT_FILENAME, "w");
 
-    fprintf(fp, "Type,Function,Digit,Time(ns)\n");
-
     const TestList& tests = TestManager::Instance().GetTests();
 
+    fprintf(fp, "var tests=[\n");
+
     puts("u32toa");
+    fprintf(fp, "{ name: 'u32toa', data:[\n");
     for (TestList::const_iterator itr = tests.begin(); itr != tests.end(); ++itr)
         Bench((*itr)->u32toa, "u32toa", (*itr)->fname, fp);
+    fprintf(fp, "]},\n");
 
     puts("");
     puts("i32toa");
+    fprintf(fp, "{ name: 'i32toa', data:[\n");
     for (TestList::const_iterator itr = tests.begin(); itr != tests.end(); ++itr)
         Bench((*itr)->i32toa, "i32toa", (*itr)->fname, fp);
+    fprintf(fp, "]},\n");
 
     puts("");
     puts("u64toa");
+    fprintf(fp, "{ name: 'u64toa', data:[\n");
     for (TestList::const_iterator itr = tests.begin(); itr != tests.end(); ++itr)
         Bench((*itr)->u64toa, "u64toa", (*itr)->fname, fp);
+    fprintf(fp, "]},\n");
 
     puts("");
     puts("i64toa");
+    fprintf(fp, "{ name: 'i64toa', data:[\n");
     for (TestList::const_iterator itr = tests.begin(); itr != tests.end(); ++itr)
         Bench((*itr)->i64toa, "i64toa", (*itr)->fname, fp);
+    fprintf(fp, "]},\n");
 
+    fprintf(fp, "];\n");
     fclose(fp);
 }
 
 int main() {
     // sort tests
     TestList& tests = TestManager::Instance().GetTests();
-    std::sort(tests.begin(), tests.end());
+
+    SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
+    SetThreadAffinityMask(GetCurrentThread(), 1);
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 
     VerifyAll();
     BenchAll();

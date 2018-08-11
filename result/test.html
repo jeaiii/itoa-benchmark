@@ -1,0 +1,63 @@
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/modules/series-label.js"></script>
+<script src="https://code.highcharts.com/modules/exporting.js"></script>
+
+<div id="container" style="min-width: 512px; min-height: 768px; margin: 0 auto"></div>
+
+<script src="unknown_win64_vc2013.csv"></script>
+<script>
+Highcharts.chart('container', {
+
+    title: {
+        text: 'u32toa'
+    },
+
+    xAxis: {
+	tickInterval: 1,
+        title: {
+            text: 'digits'
+        }
+    },
+
+    yAxis: {
+        title: {
+            text: 'time (ns)'
+        },
+	type: 'logarithmic',
+        minorTickInterval: 0.1
+    },
+    legend: {
+        layout: 'vertical',
+        align: 'right',
+        verticalAlign: 'middle'
+    },
+
+    plotOptions: {
+        series: {
+            label: {
+                connectorAllowed: false
+            },
+            pointStart: 0
+        }
+    },
+
+    series: u64toadd,
+
+    responsive: {
+        rules: [{
+            //condition: {
+            //    maxWidth: 500
+            //},
+            chartOptions: {
+                legend: {
+                    //layout: 'horizontal',
+                    //align: 'center',
+                    //verticalAlign: 'bottom'
+                }
+            }
+        }]
+    }
+
+});
+
+</script>
